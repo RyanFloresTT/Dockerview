@@ -8,11 +8,17 @@ import (
 
 	"github.com/moby/moby/client"
 
+	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
+var baseStyle = lipgloss.NewStyle().
+	BorderStyle(lipgloss.NormalBorder()).
+	BorderForeground(lipgloss.Color("240"))
+
 type model struct {
+	table      table.Model
 	containers client.ContainerListResult
 	cursor     int
 	err        error
@@ -32,10 +38,38 @@ func initialModel() model {
 		return model{err: err, loading: false}
 	}
 
+	// Setup table columns
+	columns := []table.Column{
+		{Title: "Name", Width: 25},
+		{Title: "Image", Width: 30},
+		{Title: "Status", Width: 20},
+		{Title: "State", Width: 10},
+	}
+
+	t := table.New(
+		table.WithColumns(columns),
+		table.WithRows([]table.Row{}),
+		table.WithFocused(true),
+		table.WithHeight(10),
+	)
+
+	s := table.DefaultStyles()
+	s.Header = s.Header.
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		BorderBottom(true).
+		Bold(true)
+	s.Selected = s.Selected.
+		Foreground(lipgloss.Color("229")).
+		Background(lipgloss.Color("57")).
+		Bold(false)
+	t.SetStyles(s)
+
 	return model{
 		dockerCli:  cli,
 		containers: client.ContainerListResult{},
 		loading:    true,
+		table:      t,
 	}
 }
 
@@ -55,6 +89,8 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
 	switch msg := msg.(type) {
 
 	case containersLoadedMsg:
@@ -64,6 +100,38 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.containers = msg.containers
+
+		// Convert containers to table rows
+		var rows []table.Row
+		for _, c := range m.containers.Items {
+			name := "unnamed"
+			if len(c.Names) > 0 {
+				name = strings.TrimPrefix(c.Names[0], "/")
+			}
+
+			// Truncate image if too long
+			image := c.Image
+			if len(image) > 28 {
+				image = image[:25] + "..."
+			}
+
+			// Format status
+			status := c.Status
+			if len(status) > 18 {
+				status = status[:15] + "..."
+			}
+
+			// State indicator
+			state := c.State
+			if state == "running" {
+				state = "● running"
+			} else {
+				state = "○ " + state
+			}
+
+			rows = append(rows, table.Row{name, image, status, state})
+		}
+		m.table.SetRows(rows)
 		return m, nil
 
 	case tea.KeyMsg:
@@ -77,126 +145,47 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Quit
 
-		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-
-		case "down", "j":
-			if m.cursor < len(m.containers.Items)-1 {
-				m.cursor++
-			}
-
 		case "r":
+			// Refresh container list
 			m.loading = true
 			return m, loadContainers(m.dockerCli)
 		}
 	}
 
-	return m, nil
+	m.table, cmd = m.table.Update(msg)
+	return m, cmd
 }
 
 func (m model) View() string {
-	// Styles
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("#FAFAFA")).
 		Background(lipgloss.Color("#7D56F4")).
-		Padding(0, 1)
+		Padding(0, 1).
+		MarginBottom(1)
 
-	headerStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#FAFAFA")).
-		PaddingTop(1).
-		PaddingBottom(1)
-
-	containerStyle := lipgloss.NewStyle().
-		PaddingLeft(2).
-		MarginBottom(0)
-
-	selectedStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#7D56F4")).
-		PaddingLeft(2)
-
-	runningStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#04B575"))
-
-	stoppedStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FF6B6B"))
+	helpStyle := lipgloss.NewStyle().
+		Faint(true).
+		MarginTop(1)
 
 	// Error state
 	if m.err != nil {
-		return fmt.Sprintf("\n❌ Error connecting to Docker: %v\n\nPress q to quit.\n", m.err)
+		return fmt.Sprintf("\nError connecting to Docker: %v\n\nPress q to quit.\n", m.err)
 	}
 
 	// Loading state
 	if m.loading {
-		return "\n⏳ Loading containers...\n"
+		return "\nLoading containers...\n"
 	}
 
 	// Build the UI
 	var b strings.Builder
 
-	b.WriteString(titleStyle.Render("🐳 Docker Container Viewer"))
+	b.WriteString(titleStyle.Render("Docker Container Viewer"))
 	b.WriteString("\n\n")
-	b.WriteString(headerStyle.Render(fmt.Sprintf("Found %d containers:", len(m.containers.Items))))
-	b.WriteString("\n\n")
-
-	if len(m.containers.Items) == 0 {
-		b.WriteString("  No containers found.\n")
-	} else {
-		for i, c := range m.containers.Items {
-			cursor := " "
-			style := containerStyle
-
-			if m.cursor == i {
-				cursor = "▶"
-				style = selectedStyle
-			}
-
-			// Container name
-			name := "unnamed"
-			if len(c.Names) > 0 {
-				name = strings.TrimPrefix(c.Names[0], "/")
-				if len(name) > 20 {
-					name = name[:17] + "..."
-				} else {
-					for len(name) < 20 {
-						name += " "
-					}
-				}
-			}
-
-			// Status styling
-			status := c.Status
-			if c.State == "running" {
-				status = runningStyle.Render("● " + status)
-			} else {
-				status = stoppedStyle.Render("○ " + status)
-			}
-
-			// Format image name (shortened)
-			image := c.Image
-			if len(image) > 12 {
-				image = image[:9] + "..."
-			}
-
-			line := fmt.Sprintf("%s %s\t    Image: %s\t    %s",
-				cursor,
-				name,
-				image,
-				status,
-			)
-
-			b.WriteString(style.Render(line))
-			b.WriteString("\n\n")
-		}
-	}
-
-	// Footer
+	b.WriteString(baseStyle.Render(m.table.View()))
 	b.WriteString("\n")
-	b.WriteString(lipgloss.NewStyle().Faint(true).Render("↑/k up • ↓/j down • r refresh • q quit"))
+	b.WriteString(helpStyle.Render("↑/↓ navigate • r refresh • q quit"))
 	b.WriteString("\n")
 
 	return b.String()
