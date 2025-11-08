@@ -1,4 +1,4 @@
-module dockerview
+module github.com/RyanFloresTT/dockerview
 
 go 1.24.0
 
