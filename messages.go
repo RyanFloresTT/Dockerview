@@ -16,7 +16,7 @@ type containersLoadedMsg struct {
 }
 
 func tickEverySecond() tea.Cmd {
-	return tea.Tick(time.Second/2, func(t time.Time) tea.Msg {
+	return tea.Tick(time.Second/4, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }

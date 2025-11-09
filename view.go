@@ -23,7 +23,6 @@ func (m model) renderListView() string {
 		b.WriteString("\nRun 'docker ps -a' to check if you have containers.\n")
 		b.WriteString("Press 'r' to refresh or 'q' to quit.\n")
 	} else {
-		// The baseStyle now correctly wraps just the table
 		b.WriteString(baseStyle.Render(m.table.View()))
 	}
 

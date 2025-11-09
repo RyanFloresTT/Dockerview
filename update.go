@@ -13,6 +13,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.currentTime = time.Now()
 	var cmd tea.Cmd
 
+	if m.mode == detailView && m.detailContainer != nil {
+		for i := range m.containers.Items {
+			if m.containers.Items[i].ID == m.detailContainer.ID {
+				m.detailContainer = &m.containers.Items[i]
+				break
+			}
+		}
+	}
+
 	switch msg := msg.(type) {
 
 	case tea.WindowSizeMsg:
@@ -99,54 +108,54 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.detailContainer = nil
 				return m, nil
 			}
-		} else {
-			switch msg.String() {
-			case "enter":
-				if len(m.containers.Items) > 0 {
-					selectedIdx := m.table.Cursor()
-					if selectedIdx >= 0 && selectedIdx < len(m.containers.Items) {
-						m.mode = detailView
-						m.detailContainer = &m.containers.Items[selectedIdx]
-						return m, nil
-					}
-				}
+		}
 
-			case "r":
+		switch msg.String() {
+		case "enter":
+			if len(m.containers.Items) > 0 {
 				selectedIdx := m.table.Cursor()
 				if selectedIdx >= 0 && selectedIdx < len(m.containers.Items) {
+					m.mode = detailView
 					m.detailContainer = &m.containers.Items[selectedIdx]
+					return m, nil
 				}
-				_, err := RestartContainer(m, *m.detailContainer)
-				if err != nil {
-					return nil, nil
-				}
-
-				return m, nil
-
-			case "x":
-				selectedIdx := m.table.Cursor()
-				if selectedIdx >= 0 && selectedIdx < len(m.containers.Items) {
-					m.detailContainer = &m.containers.Items[selectedIdx]
-				}
-				_, err := StartContainer(m, *m.detailContainer)
-				if err != nil {
-					return nil, nil
-				}
-
-				return m, nil
-
-			case "s":
-				selectedIdx := m.table.Cursor()
-				if selectedIdx >= 0 && selectedIdx < len(m.containers.Items) {
-					m.detailContainer = &m.containers.Items[selectedIdx]
-				}
-				_, err := StopContainer(m, *m.detailContainer)
-				if err != nil {
-					return nil, nil
-				}
-
-				return m, nil
 			}
+
+		case "r":
+			selectedIdx := m.table.Cursor()
+			if selectedIdx >= 0 && selectedIdx < len(m.containers.Items) {
+				m.detailContainer = &m.containers.Items[selectedIdx]
+			}
+			_, err := RestartContainer(m, *m.detailContainer)
+			if err != nil {
+				return nil, nil
+			}
+
+			return m, nil
+
+		case "x":
+			selectedIdx := m.table.Cursor()
+			if selectedIdx >= 0 && selectedIdx < len(m.containers.Items) {
+				m.detailContainer = &m.containers.Items[selectedIdx]
+			}
+			_, err := StartContainer(m, *m.detailContainer)
+			if err != nil {
+				return nil, nil
+			}
+
+			return m, nil
+
+		case "s":
+			selectedIdx := m.table.Cursor()
+			if selectedIdx >= 0 && selectedIdx < len(m.containers.Items) {
+				m.detailContainer = &m.containers.Items[selectedIdx]
+			}
+			_, err := StopContainer(m, *m.detailContainer)
+			if err != nil {
+				return nil, nil
+			}
+
+			return m, nil
 		}
 	}
 	m.table, cmd = m.table.Update(msg)
