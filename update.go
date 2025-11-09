@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -96,12 +97,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		// Global keys
-		switch msg.String() {
-		case "?":
+		switch {
+		case key.Matches(msg, m.keys.Help):
 			m.help.ShowAll = !m.help.ShowAll
 			return m, nil
 
-		case "ctrl+c", "q":
+		case key.Matches(msg, m.keys.Quit):
 			if m.dockerCli != nil {
 				err := m.dockerCli.Close()
 				if err != nil {
@@ -109,19 +110,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return m, tea.Quit
-		}
 
-		if m.mode == detailView {
-			switch msg.String() {
-			case "esc", "backspace":
-				m.mode = listView
-				m.detailContainer = nil
-				return m, nil
-			}
-		}
-
-		switch msg.String() {
-		case "enter":
+		case key.Matches(msg, m.keys.Enter):
 			if len(m.containers.Items) > 0 {
 				selectedIdx := m.table.Cursor()
 				if selectedIdx >= 0 && selectedIdx < len(m.containers.Items) {
@@ -131,7 +121,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-		case "r":
+		case key.Matches(msg, m.keys.Refresh):
 			selectedIdx := m.table.Cursor()
 			if selectedIdx >= 0 && selectedIdx < len(m.containers.Items) {
 				m.detailContainer = &m.containers.Items[selectedIdx]
@@ -143,7 +133,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			return m, nil
 
-		case "x":
+		case key.Matches(msg, m.keys.Start):
 			selectedIdx := m.table.Cursor()
 			if selectedIdx >= 0 && selectedIdx < len(m.containers.Items) {
 				m.detailContainer = &m.containers.Items[selectedIdx]
@@ -155,7 +145,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			return m, nil
 
-		case "s":
+		case key.Matches(msg, m.keys.Stop):
 			selectedIdx := m.table.Cursor()
 			if selectedIdx >= 0 && selectedIdx < len(m.containers.Items) {
 				m.detailContainer = &m.containers.Items[selectedIdx]
@@ -166,6 +156,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			return m, nil
+		}
+		if m.mode == detailView {
+			switch {
+			case key.Matches(msg, m.keys.Back):
+				m.mode = listView
+				m.detailContainer = nil
+				return m, nil
+			}
 		}
 	}
 

@@ -21,7 +21,7 @@ const (
 )
 
 type model struct {
-	keys            help.KeyMap
+	keys            keyMap
 	help            help.Model
 	viewport        viewport.Model
 	width           int
