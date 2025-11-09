@@ -2,6 +2,7 @@
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -139,7 +140,13 @@ func (m model) renderDetailView() string {
 			RootStyle(rootStyle).
 			ItemStyle(itemStyle)
 
-		for _, port := range c.Ports {
+		ports := make([]container.PortSummary, len(c.Ports))
+		copy(ports, c.Ports)
+		sort.Slice(ports, func(i, j int) bool {
+			return ports[i].PrivatePort < ports[j].PrivatePort
+		})
+
+		for _, port := range ports {
 			if port.PublicPort > 0 {
 				t.Child(fmt.Sprintf("%s:%d -> %d/%s",
 					port.IP, port.PublicPort, port.PrivatePort, port.Type))
@@ -160,7 +167,14 @@ func (m model) renderDetailView() string {
 			RootStyle(rootStyle).
 			ItemStyle(itemStyle)
 
-		for name, network := range c.NetworkSettings.Networks {
+		networkNames := make([]string, 0, len(c.NetworkSettings.Networks))
+		for name := range c.NetworkSettings.Networks {
+			networkNames = append(networkNames, name)
+		}
+		sort.Strings(networkNames)
+
+		for _, name := range networkNames {
+			network := c.NetworkSettings.Networks[name]
 			t.Child(fmt.Sprintf("%s (IP: %s)", name, network.IPAddress))
 		}
 
@@ -177,7 +191,13 @@ func (m model) renderDetailView() string {
 			RootStyle(rootStyle).
 			ItemStyle(itemStyle)
 
-		for _, mount := range c.Mounts {
+		mounts := make([]container.MountPoint, len(c.Mounts))
+		copy(mounts, c.Mounts)
+		sort.Slice(mounts, func(i, j int) bool {
+			return mounts[i].Destination < mounts[j].Destination
+		})
+
+		for _, mount := range mounts {
 			mountNode := tree.
 				Root(fmt.Sprintf("🖿 %s", mount.Destination)).
 				Enumerator(tree.RoundedEnumerator).
