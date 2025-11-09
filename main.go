@@ -20,14 +20,6 @@ var (
 	baseStyle = lipgloss.NewStyle().
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(lipgloss.Color("240"))
-
-	barBase = lipgloss.NewStyle().
-		Background(lipgloss.Color("#303030")).
-		Foreground(lipgloss.Color("#fafafa")).
-		Padding(0, 1)
-
-	leftStyle  = lipgloss.NewStyle().Inherit(barBase).Foreground(lipgloss.Color("#77ff77"))
-	rightStyle = lipgloss.NewStyle().Inherit(barBase).Foreground(lipgloss.Color("#ffcc66"))
 )
 
 type viewMode int
@@ -59,20 +51,46 @@ type containersLoadedMsg struct {
 }
 
 func statusBar(width int, left, right string) string {
-	l := leftStyle.Render(left)
-	r := rightStyle.Render(right)
+	bgColor := lipgloss.Color("#1e1e2e")
+	fgColor := lipgloss.Color("#cdd6f4")
 
-	pad := width - lipgloss.Width(l) - lipgloss.Width(r)
-	if pad < 0 {
-		pad = 0
+	style := lipgloss.NewStyle().
+		Foreground(fgColor).
+		Background(bgColor).
+		Padding(0, 2)
+
+	leftRendered := style.Render(left)
+	rightRendered := style.Render(right)
+
+	lWidth := lipgloss.Width(leftRendered)
+	rWidth := lipgloss.Width(rightRendered)
+
+	space := width - lWidth - rWidth
+	if space < 0 {
+		space = 0
 	}
-	return l + strings.Repeat(" ", pad) + r
+
+	spacer := lipgloss.NewStyle().
+		Background(bgColor).
+		Render(strings.Repeat(" ", space))
+
+	return lipgloss.NewStyle().
+		Width(width).
+		Background(bgColor).
+		Render(leftRendered + spacer + rightRendered)
 }
 
 func tickEverySecond() tea.Cmd {
 	return tea.Tick(time.Second/2, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func initialModel() model {
@@ -94,7 +112,6 @@ func initialModel() model {
 		table.WithColumns(columns),
 		table.WithRows([]table.Row{}),
 		table.WithFocused(true),
-		table.WithHeight(15),
 	)
 
 	s := table.DefaultStyles()
@@ -144,6 +161,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.viewport.Width = msg.Width
 		m.viewport.Height = msg.Height - 1
+		tableHeight := max(1, m.viewport.Height-5)
+		m.table.SetHeight(tableHeight)
+		availableWidth := max(0, m.width-2-3-20-15)
+
+		nameWidth := int(float64(availableWidth) * 0.4)
+		imageWidth := availableWidth - nameWidth
+
+		m.table.SetColumns([]table.Column{
+			{Title: "Name", Width: nameWidth},
+			{Title: "Image", Width: imageWidth},
+			{Title: "Status", Width: 20},
+			{Title: "State", Width: 10},
+		})
 		return m, nil
 
 	case tickMsg:
@@ -166,12 +196,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				name = strings.TrimPrefix(c.Names[0], "/")
 			}
 
-			// Truncate image if too long
-			image := c.Image
-			if len(image) > 28 {
-				image = image[:25] + "..."
-			}
-
 			// Format status
 			status := c.Status
 			if len(status) > 18 {
@@ -186,7 +210,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				state = "○ " + state
 			}
 
-			rows = append(rows, table.Row{name, image, status, state})
+			rows = append(rows, table.Row{name, c.Image, status, state})
 		}
 		m.table.SetRows(rows)
 		return m, nil
@@ -202,6 +226,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return m, tea.Quit
+		}
+
+		if m.mode == listView {
+			m.table, cmd = m.table.Update(msg)
 		}
 
 		if m.mode == detailView {
@@ -273,10 +301,7 @@ func StartContainer(m model, d container.Summary) (client.ContainerStartResult, 
 	return start, nil
 }
 
-func (m model) View() string {
-	m.viewport.Width = m.width
-	m.viewport.Height = m.height - 1
-
+func (m model) renderListView() string {
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("#FAFAFA")).
@@ -286,21 +311,6 @@ func (m model) View() string {
 	helpStyle := lipgloss.NewStyle().
 		Faint(true).
 		MarginTop(1)
-
-	// Error state
-	if m.err != nil {
-		return fmt.Sprintf("\nError connecting to Docker: %v\n\nPress q to quit.\n", m.err)
-	}
-
-	// Loading state
-	if m.loading {
-		return "\nLoading containers...\n"
-	}
-
-	// Detail view
-	if m.mode == detailView && m.detailContainer != nil {
-		return m.renderDetailView()
-	}
 
 	var b strings.Builder
 
@@ -313,16 +323,48 @@ func (m model) View() string {
 		b.WriteString("\nRun 'docker ps -a' to check if you have containers.\n")
 		b.WriteString("Press 'r' to refresh or 'q' to quit.\n")
 	} else {
+		// The baseStyle now correctly wraps just the table
 		b.WriteString(baseStyle.Render(m.table.View()))
 	}
 
 	b.WriteString("\n")
 	b.WriteString(helpStyle.Render("↑/↓ navigate • enter details • x start • s stop • r refresh • q quit"))
 
-	m.viewport.SetContent(b.String())
+	return b.String()
+}
 
-	left := fmt.Sprintf("%d  —  %d containers", m.mode, len(m.containers.Items))
-	right := fmt.Sprintf("Selected %d  •  %s", m.selectedIndex, m.currentTime.Format("15:04:05"))
+func (m model) View() string {
+	// Always set viewport size
+	m.viewport.Width = m.width
+	m.viewport.Height = m.height - 1
+
+	var viewContent string
+
+	// Error state
+	if m.err != nil {
+		viewContent = fmt.Sprintf("\nError connecting to Docker: %v\n\nPress q to quit.\n", m.err)
+	} else if m.loading {
+		viewContent = "\nLoading containers...\n"
+	} else if m.mode == detailView && m.detailContainer != nil {
+		viewContent = m.renderDetailView()
+	} else {
+		viewContent = m.renderListView()
+	}
+
+	m.viewport.SetContent(viewContent)
+
+	var left, right string
+	if m.mode == detailView && m.detailContainer != nil {
+		name := "unnamed"
+		if len(m.detailContainer.Names) > 0 {
+			name = strings.TrimPrefix(m.detailContainer.Names[0], "/")
+		}
+		left = fmt.Sprintf("Detail: %s", name)
+	} else {
+		left = fmt.Sprintf("%d containers", len(m.containers.Items))
+		right = fmt.Sprintf("Selected %d  •  %s", m.table.Cursor(), m.currentTime.Format("15:04:05"))
+	}
+
 	bar := statusBar(m.width, left, right)
 
 	return lipgloss.JoinVertical(
