@@ -21,7 +21,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.Height = msg.Height - 1
 		tableHeight := max(1, m.viewport.Height-5)
 		m.table.SetHeight(tableHeight)
-		availableWidth := max(0, m.width-2-3-20-15)
+		availableWidth := max(0, m.width-2-3-20-17)
 
 		nameWidth := int(float64(availableWidth) * 0.4)
 		imageWidth := availableWidth - nameWidth
@@ -29,7 +29,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.table.SetColumns([]table.Column{
 			{Title: "Name", Width: nameWidth},
 			{Title: "Image", Width: imageWidth},
-			{Title: "Status", Width: 20},
+			{Title: "CPU", Width: 10},
+			{Title: "Memory", Width: 10},
 			{Title: "State", Width: 10},
 		})
 		return m, nil
@@ -54,12 +55,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				name = strings.TrimPrefix(c.Names[0], "/")
 			}
 
-			// Format status
-			status := c.Status
-			if len(status) > 18 {
-				status = status[:15] + "..."
-			}
-
 			// State indicator
 			state := c.State
 			if state == "running" {
@@ -68,7 +63,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				state = "○ " + state
 			}
 
-			rows = append(rows, table.Row{name, c.Image, status, state})
+			rows = append(rows, table.Row{name, c.Image, "5%", "5%", state})
 		}
 		m.table.SetRows(rows)
 		return m, nil

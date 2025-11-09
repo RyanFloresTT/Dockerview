@@ -43,7 +43,7 @@ func (m model) renderListView() string {
 }
 
 func (m model) View() string {
-	// Always set viewport size
+	// Always set the viewport size
 	m.viewport.Width = m.width
 	m.viewport.Height = m.height - 1
 
@@ -68,7 +68,8 @@ func (m model) View() string {
 		if len(m.detailContainer.Names) > 0 {
 			name = strings.TrimPrefix(m.detailContainer.Names[0], "/")
 		}
-		left = fmt.Sprintf("Detail: %s", name)
+		left = fmt.Sprintf("Name: %s. ID: %s. Image: %s", name, m.detailContainer.ID[:12], m.detailContainer.Image)
+		right = fmt.Sprintf("%s", m.currentTime.Format("15:04:05"))
 	} else {
 		left = fmt.Sprintf("%d containers\t● %d | ○ %d", len(m.containers.Items), GetActiveContainerCount(m.containers.Items), GetInactiveContainerCount(m.containers.Items))
 		right = fmt.Sprintf("Selected %d •  %s", m.table.Cursor()+1, m.currentTime.Format("15:04:05"))
@@ -100,12 +101,6 @@ func GetInactiveContainerCount(c []container.Summary) int {
 func (m model) renderDetailView() string {
 	c := m.detailContainer
 
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#FAFAFA")).
-		Padding(0, 1).
-		MarginBottom(1)
-
 	labelStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("#7D56F4"))
@@ -119,41 +114,13 @@ func (m model) renderDetailView() string {
 
 	var b strings.Builder
 
-	// Container name
-	name := "unnamed"
-	if len(c.Names) > 0 {
-		name = strings.TrimPrefix(c.Names[0], "/")
-	}
-
-	b.WriteString(titleStyle.Render(fmt.Sprintf("%s", name)))
-	b.WriteString("\n")
-
-	// Container ID
-	b.WriteString(labelStyle.Render("ID: "))
-	b.WriteString(valueStyle.Render(c.ID[:12]))
-	b.WriteString("\n")
-
-	// Image
-	b.WriteString(labelStyle.Render("Image: "))
-	b.WriteString(valueStyle.Render(c.Image))
-	b.WriteString("\n")
-
-	// Image ID
-	b.WriteString(labelStyle.Render("Image ID: "))
-	b.WriteString(valueStyle.Render(c.ImageID))
-	b.WriteString("\n")
-
-	// Command
-	b.WriteString(labelStyle.Render("Command: "))
-	b.WriteString(valueStyle.Render(c.Command))
-	b.WriteString("\n")
-
 	// State
 	b.WriteString(labelStyle.Render("State: "))
 	stateColor := lipgloss.Color("#FF6B6B")
 	if c.State == "running" {
 		stateColor = "#04B575"
 	}
+
 	b.WriteString(lipgloss.NewStyle().Foreground(stateColor).Bold(true).Render(c.State))
 	b.WriteString("\n")
 

@@ -11,6 +11,8 @@ import (
 	"github.com/moby/moby/client"
 )
 
+type viewMode int
+
 const (
 	listView viewMode = iota
 	detailView
@@ -30,8 +32,6 @@ type model struct {
 	detailContainer *container.Summary
 	currentTime     time.Time
 }
-
-type viewMode int
 
 func initialModel() model {
 	// Create a Docker client
