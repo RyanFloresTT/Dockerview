@@ -12,10 +12,6 @@ import (
 )
 
 func (m model) renderListView() string {
-	helpStyle := lipgloss.NewStyle().
-		Faint(true).
-		MarginTop(1)
-
 	var b strings.Builder
 
 	if len(m.containers.Items) == 0 {
@@ -27,16 +23,17 @@ func (m model) renderListView() string {
 		b.WriteString(baseStyle.Render(m.table.View()))
 	}
 
-	b.WriteString("\n")
-	b.WriteString(helpStyle.Render("↑/↓ navigate • enter details • x start • s stop • r refresh • q quit"))
-
 	return b.String()
 }
 
 func (m model) View() string {
-	// Always set the viewport size
+	// Calculate help height first
+	helpView := m.help.View(m.keys)
+	helpHeight := lipgloss.Height(helpView)
+
+	// Set the viewport size accounting for status bar (1) and help
 	m.viewport.Width = m.width
-	m.viewport.Height = m.height - 1
+	m.viewport.Height = m.height - 1 - helpHeight
 
 	var viewContent string
 
@@ -55,7 +52,6 @@ func (m model) View() string {
 
 	var left, right string
 	if m.mode == detailView && m.detailContainer != nil {
-
 		name := "unnamed"
 		if len(m.detailContainer.Names) > 0 {
 			name = strings.TrimPrefix(m.detailContainer.Names[0], "/")
@@ -72,6 +68,7 @@ func (m model) View() string {
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		m.viewport.View(),
+		helpView,
 		bar,
 	)
 }
@@ -225,7 +222,6 @@ func (m model) renderDetailView() string {
 	}
 
 	b.WriteString(helpStyle.Render("esc/backspace go back • q quit"))
-	b.WriteString("\n")
 
 	return b.String()
 }

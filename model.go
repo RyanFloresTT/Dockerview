@@ -3,6 +3,8 @@
 import (
 	"time"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -19,6 +21,8 @@ const (
 )
 
 type model struct {
+	keys            help.KeyMap
+	help            help.Model
 	viewport        viewport.Model
 	width           int
 	height          int
@@ -31,6 +35,73 @@ type model struct {
 	mode            viewMode
 	detailContainer *container.Summary
 	currentTime     time.Time
+}
+
+// keyMap defines a set of keybindings. To work for help it must satisfy
+// key.Map. It could also very easily be a map[string]key.Binding.
+type keyMap struct {
+	Up      key.Binding
+	Down    key.Binding
+	Enter   key.Binding
+	Start   key.Binding
+	Stop    key.Binding
+	Refresh key.Binding
+	Back    key.Binding
+	Quit    key.Binding
+	Help    key.Binding
+}
+
+var keys = keyMap{
+	Up: key.NewBinding(
+		key.WithKeys("up", "k"),
+		key.WithHelp("↑/k", "move up"),
+	),
+	Down: key.NewBinding(
+		key.WithKeys("down", "j"),
+		key.WithHelp("↓/j", "move down"),
+	),
+	Enter: key.NewBinding(
+		key.WithKeys("enter"),
+		key.WithHelp("enter", "details"),
+	),
+	Start: key.NewBinding(
+		key.WithKeys("x"),
+		key.WithHelp("x", "start"),
+	),
+	Stop: key.NewBinding(
+		key.WithKeys("s"),
+		key.WithHelp("s", "stop"),
+	),
+	Refresh: key.NewBinding(
+		key.WithKeys("r"),
+		key.WithHelp("r", "refresh"),
+	),
+	Back: key.NewBinding(
+		key.WithKeys("esc", "backspace"),
+		key.WithHelp("esc", "back"),
+	),
+	Quit: key.NewBinding(
+		key.WithKeys("q", "ctrl+c"),
+		key.WithHelp("q", "quit"),
+	),
+	Help: key.NewBinding(
+		key.WithKeys("?"),
+		key.WithHelp("?", "help"),
+	),
+}
+
+// ShortHelp returns keybindings to be shown in the mini help view.
+func (k keyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Help, k.Quit}
+}
+
+// FullHelp returns keybindings for the expanded help view.
+func (k keyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{k.Up, k.Down, k.Enter},
+		{k.Start, k.Stop, k.Refresh},
+		{k.Back, k.Quit},
+	}
 }
 
 func initialModel() model {
@@ -72,6 +143,8 @@ func initialModel() model {
 		containers: client.ContainerListResult{},
 		loading:    true,
 		mode:       listView,
+		keys:       keys,
+		help:       help.New(),
 	}
 }
 

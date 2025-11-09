@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -27,10 +28,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+
+		helpHeight := lipgloss.Height(m.help.View(m.keys))
+
 		m.viewport.Width = msg.Width
-		m.viewport.Height = msg.Height - 1
+		m.viewport.Height = msg.Height - 1 - helpHeight
+
 		tableHeight := max(1, m.viewport.Height-5)
 		m.table.SetHeight(tableHeight)
+
 		availableWidth := max(0, m.width-2-3-20-17)
 
 		nameWidth := int(float64(availableWidth) * 0.4)
@@ -91,6 +97,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		// Global keys
 		switch msg.String() {
+		case "?":
+			m.help.ShowAll = !m.help.ShowAll
+			return m, nil
+
 		case "ctrl+c", "q":
 			if m.dockerCli != nil {
 				err := m.dockerCli.Close()
