@@ -234,13 +234,18 @@ func statusBar(width int, left, right string) string {
 	bgColor := lipgloss.Color("#1e1e2e")
 	fgColor := lipgloss.Color("#cdd6f4")
 
-	style := lipgloss.NewStyle().
+	leftStyle := lipgloss.NewStyle().
 		Foreground(fgColor).
 		Background(bgColor).
 		Padding(0, 2)
 
-	leftRendered := style.Render(left)
-	rightRendered := style.Render(right)
+	rightStyle := lipgloss.NewStyle().
+		Foreground(fgColor).
+		Background(bgColor).
+		Padding(0, 2)
+
+	leftRendered := leftStyle.Render(left)
+	rightRendered := rightStyle.Render(right)
 
 	lWidth := lipgloss.Width(leftRendered)
 	rWidth := lipgloss.Width(rightRendered)
