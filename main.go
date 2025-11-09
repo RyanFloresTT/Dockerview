@@ -358,8 +358,8 @@ func (m model) View() string {
 		}
 		left = fmt.Sprintf("Detail: %s", name)
 	} else {
-		left = fmt.Sprintf("%d containers", len(m.containers.Items))
-		right = fmt.Sprintf("Selected %d  •  %s", m.table.Cursor(), m.currentTime.Format("15:04:05"))
+		left = fmt.Sprintf("%d containers\t● %d | ○ %d", len(m.containers.Items), GetActiveContainerCount(m.containers.Items), GetInactiveContainerCount(m.containers.Items))
+		right = fmt.Sprintf("Selected %d •  %s", m.table.Cursor()+1, m.currentTime.Format("15:04:05"))
 	}
 
 	bar := statusBar(m.width, left, right)
@@ -369,6 +369,20 @@ func (m model) View() string {
 		m.viewport.View(),
 		bar,
 	)
+}
+
+func GetActiveContainerCount(c []container.Summary) int {
+	count := 0
+	for _, container := range c {
+		if container.State == "running" {
+			count++
+		}
+	}
+	return count
+}
+
+func GetInactiveContainerCount(c []container.Summary) int {
+	return len(c) - GetActiveContainerCount(c)
 }
 
 func (m model) renderDetailView() string {
