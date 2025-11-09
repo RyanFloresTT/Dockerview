@@ -97,10 +97,6 @@ func (m model) renderDetailView() string {
 	valueStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#FAFAFA"))
 
-	helpStyle := lipgloss.NewStyle().
-		Faint(true).
-		MarginTop(1)
-
 	var b strings.Builder
 
 	// State
@@ -221,9 +217,12 @@ func (m model) renderDetailView() string {
 		b.WriteString(t.String())
 	}
 
-	b.WriteString(helpStyle.Render("esc/backspace go back • q quit"))
+	border := lipgloss.NewStyle().
+		BorderForeground(lipgloss.Color("240")).
+		Border(lipgloss.NormalBorder()).
+		Padding(1, 1)
 
-	return b.String()
+	return border.Render(b.String())
 }
 
 func statusBar(width int, left, right string) string {
