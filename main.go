@@ -148,7 +148,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tickMsg:
 		m.currentTime = time.Time(msg)
-		return m, tickEverySecond()
+		return m, tea.Batch(loadContainers(m.dockerCli), tickEverySecond())
 
 	case containersLoadedMsg:
 		m.loading = false
