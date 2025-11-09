@@ -11,20 +11,11 @@ import (
 )
 
 func (m model) renderListView() string {
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#FAFAFA")).
-		Padding(0, 1).
-		MarginBottom(1)
-
 	helpStyle := lipgloss.NewStyle().
 		Faint(true).
 		MarginTop(1)
 
 	var b strings.Builder
-
-	b.WriteString(titleStyle.Render("DockerView"))
-	b.WriteString("\n\n")
 
 	if len(m.containers.Items) == 0 {
 		b.WriteString("No containers found.\n")
@@ -64,6 +55,7 @@ func (m model) View() string {
 
 	var left, right string
 	if m.mode == detailView && m.detailContainer != nil {
+
 		name := "unnamed"
 		if len(m.detailContainer.Names) > 0 {
 			name = strings.TrimPrefix(m.detailContainer.Names[0], "/")

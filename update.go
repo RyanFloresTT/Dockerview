@@ -1,6 +1,7 @@
 ﻿package main
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -55,6 +56,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				name = strings.TrimPrefix(c.Names[0], "/")
 			}
 
+			containerStats, err := GetContainerStats(m.dockerCli, c.ID)
+			if err != nil {
+				continue
+			}
+
+			cpuUsage := strconv.FormatFloat(containerStats.CPUPercentage, 'f', 1, 64)
+			cpuUsage += "%"
+			mem := strconv.FormatFloat(containerStats.MemoryPercentage, 'f', 1, 64)
+			mem += "%"
+
 			// State indicator
 			state := c.State
 			if state == "running" {
@@ -63,7 +74,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				state = "○ " + state
 			}
 
-			rows = append(rows, table.Row{name, c.Image, "5%", "5%", state})
+			rows = append(rows, table.Row{name, c.Image, cpuUsage, mem, state})
 		}
 		m.table.SetRows(rows)
 		return m, nil
