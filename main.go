@@ -238,11 +238,31 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				return m, nil
+
+			case "s":
+				selectedIdx := m.table.Cursor()
+				if selectedIdx >= 0 && selectedIdx < len(m.containers.Items) {
+					m.detailContainer = &m.containers.Items[selectedIdx]
+				}
+				_, err := StopContainer(m, *m.detailContainer)
+				if err != nil {
+					return nil, nil
+				}
+
+				return m, nil
 			}
 		}
 	}
 	m.table, cmd = m.table.Update(msg)
 	return m, cmd
+}
+
+func StopContainer(m model, d container.Summary) (client.ContainerStopResult, error) {
+	stop, err := m.dockerCli.ContainerStop(context.Background(), d.ID, client.ContainerStopOptions{})
+	if err != nil {
+		return stop, err
+	}
+	return stop, nil
 }
 
 func StartContainer(m model, d container.Summary) (client.ContainerStartResult, error) {
@@ -297,7 +317,7 @@ func (m model) View() string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render("↑/↓ navigate • enter details • x start • r refresh • q quit"))
+	b.WriteString(helpStyle.Render("↑/↓ navigate • enter details • x start • s stop • r refresh • q quit"))
 
 	m.viewport.SetContent(b.String())
 
