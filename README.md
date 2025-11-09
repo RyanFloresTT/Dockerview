@@ -37,7 +37,7 @@ go build -o dockerview
 
 ## Roadmap
 
-- [ ] Container start/stop/restart functionality
+- [x] Container start/stop/restart functionality
 - [ ] View container logs
 - [ ] Container stats (CPU, memory usage)
 - [ ] Filter containers by status
