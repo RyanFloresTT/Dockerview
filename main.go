@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/viewport"
+	"github.com/charmbracelet/lipgloss/tree"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
 
@@ -228,10 +229,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 
-		if m.mode == listView {
-			m.table, cmd = m.table.Update(msg)
-		}
-
 		if m.mode == detailView {
 			switch msg.String() {
 			case "esc", "backspace":
@@ -380,7 +377,6 @@ func (m model) renderDetailView() string {
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("#FAFAFA")).
-		Background(lipgloss.Color("#7D56F4")).
 		Padding(0, 1).
 		MarginBottom(1)
 
@@ -403,28 +399,28 @@ func (m model) renderDetailView() string {
 		name = strings.TrimPrefix(c.Names[0], "/")
 	}
 
-	b.WriteString(titleStyle.Render(fmt.Sprintf("Container Details: %s", name)))
-	b.WriteString("\n\n")
+	b.WriteString(titleStyle.Render(fmt.Sprintf("%s", name)))
+	b.WriteString("\n")
 
 	// Container ID
 	b.WriteString(labelStyle.Render("ID: "))
 	b.WriteString(valueStyle.Render(c.ID[:12]))
-	b.WriteString("\n\n")
+	b.WriteString("\n")
 
 	// Image
 	b.WriteString(labelStyle.Render("Image: "))
 	b.WriteString(valueStyle.Render(c.Image))
-	b.WriteString("\n\n")
+	b.WriteString("\n")
 
 	// Image ID
 	b.WriteString(labelStyle.Render("Image ID: "))
 	b.WriteString(valueStyle.Render(c.ImageID))
-	b.WriteString("\n\n")
+	b.WriteString("\n")
 
 	// Command
 	b.WriteString(labelStyle.Render("Command: "))
 	b.WriteString(valueStyle.Render(c.Command))
-	b.WriteString("\n\n")
+	b.WriteString("\n")
 
 	// State
 	b.WriteString(labelStyle.Render("State: "))
@@ -433,46 +429,60 @@ func (m model) renderDetailView() string {
 		stateColor = "#04B575"
 	}
 	b.WriteString(lipgloss.NewStyle().Foreground(stateColor).Bold(true).Render(c.State))
-	b.WriteString("\n\n")
+	b.WriteString("\n")
 
 	// Status
 	b.WriteString(labelStyle.Render("Status: "))
 	b.WriteString(valueStyle.Render(c.Status))
-	b.WriteString("\n\n")
+	b.WriteString("\n")
 
 	// Created
+	// Created
 	b.WriteString(labelStyle.Render("Created: "))
-	b.WriteString(valueStyle.Render(fmt.Sprintf("%d", c.Created)))
-	b.WriteString("\n\n")
+	// Convert Unix timestamp to time.Time object
+	createdTime := time.Unix(c.Created, 0)
+	// Format it into a human-readable string
+	createdString := createdTime.Format("2006-01-02 15:04:05")
+	b.WriteString(valueStyle.Render(createdString))
+	b.WriteString("\n")
+
+	enumeratorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("63")).MarginRight(1)
+	rootStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("35"))
+	itemStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("212"))
 
 	// Ports
 	if len(c.Ports) > 0 {
-		b.WriteString(labelStyle.Render("Ports:\n"))
+		t := tree.
+			Root("⁜ Ports").
+			Enumerator(tree.RoundedEnumerator).
+			EnumeratorStyle(enumeratorStyle).
+			RootStyle(rootStyle).
+			ItemStyle(itemStyle)
+
 		for _, port := range c.Ports {
 			if port.PublicPort > 0 {
-				b.WriteString(fmt.Sprintf("  %s:%d -> %d/%s\n",
+				t.Child(fmt.Sprintf("  %s:%d -> %d/%s\n",
 					port.IP, port.PublicPort, port.PrivatePort, port.Type))
 			} else {
-				b.WriteString(fmt.Sprintf("  %d/%s\n", port.PrivatePort, port.Type))
+				t.Child(fmt.Sprintf("  %d/%s\n", port.PrivatePort, port.Type))
 			}
 		}
-		b.WriteString("\n")
+		b.WriteString(t.String())
 	}
 
 	// Networks
 	if len(c.NetworkSettings.Networks) > 0 {
 		b.WriteString(labelStyle.Render("Networks:\n"))
 		for name, network := range c.NetworkSettings.Networks {
-			b.WriteString(fmt.Sprintf("  %s (IP: %s)\n", name, network.IPAddress))
+			b.WriteString(fmt.Sprintf("%s (IP: %s)\n", name, network.IPAddress))
 		}
-		b.WriteString("\n")
 	}
 
 	// Mounts
 	if len(c.Mounts) > 0 {
 		b.WriteString(labelStyle.Render("Mounts:\n"))
 		for _, mount := range c.Mounts {
-			b.WriteString(fmt.Sprintf("  %s -> %s (%s)\n", mount.Source, mount.Destination, mount.Type))
+			b.WriteString(fmt.Sprintf("%s -> %s (%s)\n", mount.Source, mount.Destination, mount.Type))
 		}
 		b.WriteString("\n")
 	}
