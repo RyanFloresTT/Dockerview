@@ -249,8 +249,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 			case "r":
-				m.loading = true
-				return m, loadContainers(m.dockerCli)
+				selectedIdx := m.table.Cursor()
+				if selectedIdx >= 0 && selectedIdx < len(m.containers.Items) {
+					m.detailContainer = &m.containers.Items[selectedIdx]
+				}
+				_, err := RestartContainer(m, *m.detailContainer)
+				if err != nil {
+					return nil, nil
+				}
+
+				return m, nil
 
 			case "x":
 				selectedIdx := m.table.Cursor()
@@ -280,6 +288,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	m.table, cmd = m.table.Update(msg)
 	return m, cmd
+}
+
+func RestartContainer(m model, d container.Summary) (client.ContainerRestartResult, error) {
+	restart, err := m.dockerCli.ContainerRestart(context.Background(), d.ID, client.ContainerRestartOptions{})
+	if err != nil {
+		return restart, err
+	}
+	return restart, nil
 }
 
 func StopContainer(m model, d container.Summary) (client.ContainerStopResult, error) {

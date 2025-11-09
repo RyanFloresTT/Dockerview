@@ -2,6 +2,8 @@
 
 A terminal user interface (TUI) for viewing and managing Docker containers, built with [Bubble Tea](https://github.com/charmbracelet/bubbletea) and [Lip Gloss](https://github.com/charmbracelet/lipgloss).
 
+![Dockerview In Action](/Assets/dockerview.gif)
+
 ## Features
 
 - List all containers - View both running and stopped containers
@@ -37,7 +39,7 @@ go build -o dockerview
 
 ## Roadmap
 
-- [ ] Container start/stop/restart functionality
+- [x] Container start/stop/restart functionality
 - [ ] View container logs
 - [ ] Container stats (CPU, memory usage)
 - [ ] Filter containers by status
