@@ -457,12 +457,13 @@ func (m model) renderDetailView() string {
 
 		for _, port := range c.Ports {
 			if port.PublicPort > 0 {
-				t.Child(fmt.Sprintf("  %s:%d -> %d/%s\n",
+				t.Child(fmt.Sprintf("%s:%d -> %d/%s",
 					port.IP, port.PublicPort, port.PrivatePort, port.Type))
 			} else {
-				t.Child(fmt.Sprintf("  %d/%s\n", port.PrivatePort, port.Type))
+				t.Child(fmt.Sprintf("%d/%s", port.PrivatePort, port.Type))
 			}
 		}
+		b.WriteString("\n")
 		b.WriteString(t.String())
 	}
 
@@ -476,18 +477,47 @@ func (m model) renderDetailView() string {
 			ItemStyle(itemStyle)
 
 		for name, network := range c.NetworkSettings.Networks {
-			t.Child(fmt.Sprintf("%s (IP: %s)\n", name, network.IPAddress))
+			t.Child(fmt.Sprintf("%s (IP: %s)", name, network.IPAddress))
 		}
+
+		b.WriteString("\n\n")
 		b.WriteString(t.String())
 	}
 
 	// Mounts
 	if len(c.Mounts) > 0 {
-		b.WriteString(labelStyle.Render("Mounts:\n"))
+		t := tree.
+			Root("⁜ Mounts").
+			Enumerator(tree.RoundedEnumerator).
+			EnumeratorStyle(enumeratorStyle).
+			RootStyle(rootStyle).
+			ItemStyle(itemStyle)
+
 		for _, mount := range c.Mounts {
-			b.WriteString(fmt.Sprintf("%s -> %s (%s)\n", mount.Source, mount.Destination, mount.Type))
+			mountNode := tree.
+				Root(fmt.Sprintf("🖿 %s", mount.Destination)).
+				Enumerator(tree.RoundedEnumerator).
+				EnumeratorStyle(enumeratorStyle).
+				RootStyle(itemStyle).
+				ItemStyle(itemStyle)
+
+			mountNode.Child(fmt.Sprintf("Source: %s", mount.Source))
+			mountNode.Child(fmt.Sprintf("Type: %s", mount.Type))
+
+			mode := "rw"
+			if !mount.RW {
+				mode = "ro"
+			}
+			mountNode.Child(fmt.Sprintf("Mode: %s", mode))
+
+			if mount.Propagation != "" {
+				mountNode.Child(fmt.Sprintf("Propagation: %s", mount.Propagation))
+			}
+
+			t.Child(mountNode)
 		}
-		b.WriteString("\n")
+		b.WriteString("\n\n")
+		b.WriteString(t.String())
 	}
 
 	b.WriteString(helpStyle.Render("esc/backspace go back • q quit"))
