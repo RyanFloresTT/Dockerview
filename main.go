@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
 
@@ -14,11 +16,22 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-var baseStyle = lipgloss.NewStyle().
-	BorderStyle(lipgloss.NormalBorder()).
-	BorderForeground(lipgloss.Color("240"))
+var (
+	baseStyle = lipgloss.NewStyle().
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("240"))
+
+	barBase = lipgloss.NewStyle().
+		Background(lipgloss.Color("#303030")).
+		Foreground(lipgloss.Color("#fafafa")).
+		Padding(0, 1)
+
+	leftStyle  = lipgloss.NewStyle().Inherit(barBase).Foreground(lipgloss.Color("#77ff77"))
+	rightStyle = lipgloss.NewStyle().Inherit(barBase).Foreground(lipgloss.Color("#ffcc66"))
+)
 
 type viewMode int
+type tickMsg time.Time
 
 const (
 	listView viewMode = iota
@@ -26,6 +39,9 @@ const (
 )
 
 type model struct {
+	viewport        viewport.Model
+	width           int
+	height          int
 	table           table.Model
 	containers      client.ContainerListResult
 	selectedIndex   int
@@ -34,11 +50,29 @@ type model struct {
 	dockerCli       *client.Client
 	mode            viewMode
 	detailContainer *container.Summary
+	currentTime     time.Time
 }
 
 type containersLoadedMsg struct {
 	containers client.ContainerListResult
 	err        error
+}
+
+func statusBar(width int, left, right string) string {
+	l := leftStyle.Render(left)
+	r := rightStyle.Render(right)
+
+	pad := width - lipgloss.Width(l) - lipgloss.Width(r)
+	if pad < 0 {
+		pad = 0
+	}
+	return l + strings.Repeat(" ", pad) + r
+}
+
+func tickEverySecond() tea.Cmd {
+	return tea.Tick(time.Second/2, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
 }
 
 func initialModel() model {
@@ -94,15 +128,27 @@ func loadContainers(cli *client.Client) tea.Cmd {
 
 func (m model) Init() tea.Cmd {
 	if m.dockerCli != nil {
-		return loadContainers(m.dockerCli)
+		return tea.Batch(loadContainers(m.dockerCli), tickEverySecond())
 	}
-	return nil
+	return tickEverySecond()
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	m.currentTime = time.Now()
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		m.viewport.Width = msg.Width
+		m.viewport.Height = msg.Height - 1
+		return m, nil
+
+	case tickMsg:
+		m.currentTime = time.Time(msg)
+		return m, tickEverySecond()
 
 	case containersLoadedMsg:
 		m.loading = false
@@ -195,7 +241,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	}
-
 	m.table, cmd = m.table.Update(msg)
 	return m, cmd
 }
@@ -209,10 +254,12 @@ func StartContainer(m model, d container.Summary) (client.ContainerStartResult, 
 }
 
 func (m model) View() string {
+	m.viewport.Width = m.width
+	m.viewport.Height = m.height - 1
+
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("#FAFAFA")).
-		Background(lipgloss.Color("#7D56F4")).
 		Padding(0, 1).
 		MarginBottom(1)
 
@@ -235,7 +282,6 @@ func (m model) View() string {
 		return m.renderDetailView()
 	}
 
-	// List view
 	var b strings.Builder
 
 	b.WriteString(titleStyle.Render("DockerView"))
@@ -247,15 +293,23 @@ func (m model) View() string {
 		b.WriteString("\nRun 'docker ps -a' to check if you have containers.\n")
 		b.WriteString("Press 'r' to refresh or 'q' to quit.\n")
 	} else {
-		b.WriteString(fmt.Sprintf("Found %d container(s):\n\n", len(m.containers.Items)))
 		b.WriteString(baseStyle.Render(m.table.View()))
 	}
 
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render("↑/↓ navigate • enter view details • x start container • r refresh • q quit"))
-	b.WriteString("\n")
+	b.WriteString(helpStyle.Render("↑/↓ navigate • enter details • x start • r refresh • q quit"))
 
-	return b.String()
+	m.viewport.SetContent(b.String())
+
+	left := fmt.Sprintf("%d  —  %d containers", m.mode, len(m.containers.Items))
+	right := fmt.Sprintf("Selected %d  •  %s", m.selectedIndex, m.currentTime.Format("15:04:05"))
+	bar := statusBar(m.width, left, right)
+
+	return lipgloss.JoinVertical(
+		lipgloss.Left,
+		m.viewport.View(),
+		bar,
+	)
 }
 
 func (m model) renderDetailView() string {
