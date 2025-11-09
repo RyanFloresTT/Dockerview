@@ -41,7 +41,7 @@ go build -o dockerview
 
 - [x] Container start/stop/restart functionality
 - [ ] View container logs
-- [ ] Container stats (CPU, memory usage)
+- [x] Container stats (CPU, memory usage)
 - [ ] Filter containers by status
 - [ ] Search functionality
 - [ ] Container inspection details
