@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
 
 	"github.com/charmbracelet/bubbles/table"
@@ -17,13 +18,22 @@ var baseStyle = lipgloss.NewStyle().
 	BorderStyle(lipgloss.NormalBorder()).
 	BorderForeground(lipgloss.Color("240"))
 
+type viewMode int
+
+const (
+	listView viewMode = iota
+	detailView
+)
+
 type model struct {
-	table      table.Model
-	containers client.ContainerListResult
-	cursor     int
-	err        error
-	loading    bool
-	dockerCli  *client.Client
+	table           table.Model
+	containers      client.ContainerListResult
+	selectedIndex   int
+	err             error
+	loading         bool
+	dockerCli       *client.Client
+	mode            viewMode
+	detailContainer *container.Summary
 }
 
 type containersLoadedMsg struct {
@@ -50,7 +60,7 @@ func initialModel() model {
 		table.WithColumns(columns),
 		table.WithRows([]table.Row{}),
 		table.WithFocused(true),
-		table.WithHeight(10),
+		table.WithHeight(15),
 	)
 
 	s := table.DefaultStyles()
@@ -67,9 +77,10 @@ func initialModel() model {
 
 	return model{
 		dockerCli:  cli,
+		table:      t,
 		containers: client.ContainerListResult{},
 		loading:    true,
-		table:      t,
+		mode:       listView,
 	}
 }
 
@@ -135,6 +146,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// Global keys
 		switch msg.String() {
 		case "ctrl+c", "q":
 			if m.dockerCli != nil {
@@ -144,16 +156,56 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return m, tea.Quit
+		}
 
-		case "r":
-			// Refresh container list
-			m.loading = true
-			return m, loadContainers(m.dockerCli)
+		if m.mode == detailView {
+			switch msg.String() {
+			case "esc", "backspace":
+				m.mode = listView
+				m.detailContainer = nil
+				return m, nil
+			}
+		} else {
+			switch msg.String() {
+			case "enter":
+				if len(m.containers.Items) > 0 {
+					selectedIdx := m.table.Cursor()
+					if selectedIdx >= 0 && selectedIdx < len(m.containers.Items) {
+						m.mode = detailView
+						m.detailContainer = &m.containers.Items[selectedIdx]
+						return m, nil
+					}
+				}
+
+			case "r":
+				m.loading = true
+				return m, loadContainers(m.dockerCli)
+
+			case "x":
+				selectedIdx := m.table.Cursor()
+				if selectedIdx >= 0 && selectedIdx < len(m.containers.Items) {
+					m.detailContainer = &m.containers.Items[selectedIdx]
+				}
+				_, err := StartContainer(m, *m.detailContainer)
+				if err != nil {
+					return nil, nil
+				}
+
+				return m, nil
+			}
 		}
 	}
 
 	m.table, cmd = m.table.Update(msg)
 	return m, cmd
+}
+
+func StartContainer(m model, d container.Summary) (client.ContainerStartResult, error) {
+	start, err := m.dockerCli.ContainerStart(context.Background(), d.ID, client.ContainerStartOptions{})
+	if err != nil {
+		return start, err
+	}
+	return start, nil
 }
 
 func (m model) View() string {
@@ -178,21 +230,145 @@ func (m model) View() string {
 		return "\nLoading containers...\n"
 	}
 
-	// Build the UI
+	// Detail view
+	if m.mode == detailView && m.detailContainer != nil {
+		return m.renderDetailView()
+	}
+
+	// List view
 	var b strings.Builder
 
-	b.WriteString(titleStyle.Render("Docker Container Viewer"))
+	b.WriteString(titleStyle.Render("DockerView"))
 	b.WriteString("\n\n")
-	b.WriteString(baseStyle.Render(m.table.View()))
+
+	if len(m.containers.Items) == 0 {
+		b.WriteString("No containers found.\n")
+		b.WriteString(fmt.Sprintf("Debug: Loaded %d containers\n", len(m.containers.Items)))
+		b.WriteString("\nRun 'docker ps -a' to check if you have containers.\n")
+		b.WriteString("Press 'r' to refresh or 'q' to quit.\n")
+	} else {
+		b.WriteString(fmt.Sprintf("Found %d container(s):\n\n", len(m.containers.Items)))
+		b.WriteString(baseStyle.Render(m.table.View()))
+	}
+
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render("↑/↓ navigate • r refresh • q quit"))
+	b.WriteString(helpStyle.Render("↑/↓ navigate • enter view details • x start container • r refresh • q quit"))
+	b.WriteString("\n")
+
+	return b.String()
+}
+
+func (m model) renderDetailView() string {
+	c := m.detailContainer
+
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FAFAFA")).
+		Background(lipgloss.Color("#7D56F4")).
+		Padding(0, 1).
+		MarginBottom(1)
+
+	labelStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#7D56F4"))
+
+	valueStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#FAFAFA"))
+
+	helpStyle := lipgloss.NewStyle().
+		Faint(true).
+		MarginTop(1)
+
+	var b strings.Builder
+
+	// Container name
+	name := "unnamed"
+	if len(c.Names) > 0 {
+		name = strings.TrimPrefix(c.Names[0], "/")
+	}
+
+	b.WriteString(titleStyle.Render(fmt.Sprintf("Container Details: %s", name)))
+	b.WriteString("\n\n")
+
+	// Container ID
+	b.WriteString(labelStyle.Render("ID: "))
+	b.WriteString(valueStyle.Render(c.ID[:12]))
+	b.WriteString("\n\n")
+
+	// Image
+	b.WriteString(labelStyle.Render("Image: "))
+	b.WriteString(valueStyle.Render(c.Image))
+	b.WriteString("\n\n")
+
+	// Image ID
+	b.WriteString(labelStyle.Render("Image ID: "))
+	b.WriteString(valueStyle.Render(c.ImageID))
+	b.WriteString("\n\n")
+
+	// Command
+	b.WriteString(labelStyle.Render("Command: "))
+	b.WriteString(valueStyle.Render(c.Command))
+	b.WriteString("\n\n")
+
+	// State
+	b.WriteString(labelStyle.Render("State: "))
+	stateColor := lipgloss.Color("#FF6B6B")
+	if c.State == "running" {
+		stateColor = "#04B575"
+	}
+	b.WriteString(lipgloss.NewStyle().Foreground(stateColor).Bold(true).Render(c.State))
+	b.WriteString("\n\n")
+
+	// Status
+	b.WriteString(labelStyle.Render("Status: "))
+	b.WriteString(valueStyle.Render(c.Status))
+	b.WriteString("\n\n")
+
+	// Created
+	b.WriteString(labelStyle.Render("Created: "))
+	b.WriteString(valueStyle.Render(fmt.Sprintf("%d", c.Created)))
+	b.WriteString("\n\n")
+
+	// Ports
+	if len(c.Ports) > 0 {
+		b.WriteString(labelStyle.Render("Ports:\n"))
+		for _, port := range c.Ports {
+			if port.PublicPort > 0 {
+				b.WriteString(fmt.Sprintf("  %s:%d -> %d/%s\n",
+					port.IP, port.PublicPort, port.PrivatePort, port.Type))
+			} else {
+				b.WriteString(fmt.Sprintf("  %d/%s\n", port.PrivatePort, port.Type))
+			}
+		}
+		b.WriteString("\n")
+	}
+
+	// Networks
+	if len(c.NetworkSettings.Networks) > 0 {
+		b.WriteString(labelStyle.Render("Networks:\n"))
+		for name, network := range c.NetworkSettings.Networks {
+			b.WriteString(fmt.Sprintf("  %s (IP: %s)\n", name, network.IPAddress))
+		}
+		b.WriteString("\n")
+	}
+
+	// Mounts
+	if len(c.Mounts) > 0 {
+		b.WriteString(labelStyle.Render("Mounts:\n"))
+		for _, mount := range c.Mounts {
+			b.WriteString(fmt.Sprintf("  %s -> %s (%s)\n", mount.Source, mount.Destination, mount.Type))
+		}
+		b.WriteString("\n")
+	}
+
+	b.WriteString(helpStyle.Render("esc/backspace go back • q quit"))
 	b.WriteString("\n")
 
 	return b.String()
 }
 
 func main() {
-	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
+	p := tea.NewProgram(initialModel(), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
