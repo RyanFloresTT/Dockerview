@@ -436,12 +436,8 @@ func (m model) renderDetailView() string {
 	b.WriteString(valueStyle.Render(c.Status))
 	b.WriteString("\n")
 
-	// Created
-	// Created
 	b.WriteString(labelStyle.Render("Created: "))
-	// Convert Unix timestamp to time.Time object
 	createdTime := time.Unix(c.Created, 0)
-	// Format it into a human-readable string
 	createdString := createdTime.Format("2006-01-02 15:04:05")
 	b.WriteString(valueStyle.Render(createdString))
 	b.WriteString("\n")
@@ -472,10 +468,17 @@ func (m model) renderDetailView() string {
 
 	// Networks
 	if len(c.NetworkSettings.Networks) > 0 {
-		b.WriteString(labelStyle.Render("Networks:\n"))
+		t := tree.
+			Root("⁜ Networks").
+			Enumerator(tree.RoundedEnumerator).
+			EnumeratorStyle(enumeratorStyle).
+			RootStyle(rootStyle).
+			ItemStyle(itemStyle)
+
 		for name, network := range c.NetworkSettings.Networks {
-			b.WriteString(fmt.Sprintf("%s (IP: %s)\n", name, network.IPAddress))
+			t.Child(fmt.Sprintf("%s (IP: %s)\n", name, network.IPAddress))
 		}
+		b.WriteString(t.String())
 	}
 
 	// Mounts
